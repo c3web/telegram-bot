@@ -1,3 +1,3 @@
 # telegram-bot
 
-### Chatbot para Telegram usando o FatherBot
+### Chatbot para Telegram usando o BotFather

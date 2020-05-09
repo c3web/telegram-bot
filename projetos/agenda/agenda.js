@@ -3,6 +3,11 @@ const Telegraf = require('telegraf')
 const Extra = require('telegraf/extra')
 const Markup = require('telegraf/markup')
 const moment = require('moment')
+
+const session = require('telegraf/session')
+const Stage = require('telegraf/stage')
+const Scene = require('telegraf/scenes/base')
+
 const {
     getAgenda,
     getTarefa,
@@ -11,6 +16,8 @@ const {
     incluirTarefa,
     concluirTarefa,
     excluirTarefa,
+    atualizarDataTarefa,
+    atualizarObservacaoTarefa
 } = require('./agendaServicos')
 
 const bot = new Telegraf(env.token)
@@ -97,6 +104,92 @@ bot.action(/excluir (.+)/, async ctx => {
     await ctx.editMessageText('Tarefa excluída')
 })
 
+const tecladoDatas = Markup.keyboard([
+    ['Hoje', 'Amanhã'],
+    ['1 Semana', '1 Mês'],
+]).resize().oneTime().extra()
+
+let idTarefa = null
+
+//--------- Data Scene
+const dataScene = new Scene('data')
+dataScene.enter(ctx => {
+    idTarefa = ctx.match[1]
+    ctx.reply('Gostaria de definir alguma data?', tecladoDatas)
+})
+
+dataScene.leave(ctx => idTarefa = null)
+
+dataScene.hears(/hoje/gi, async ctx => {
+    const data = moment()
+    handleData(ctx, data)
+})
+
+dataScene.hears(/(Amanh[ãa])/gi, async ctx => {
+    const data = moment().add({ days: 1 })
+    handleData(ctx, data)
+})
+
+dataScene.hears(/^(\d+) dias?/gi, async ctx => {
+    const data = moment().add({ days: ctx.match[1] })
+    handleData(ctx, data)
+})
+
+dataScene.hears(/^(\d+) semanas?/gi, async ctx => {
+    const data = moment().add({ weeks: ctx.match[1] })
+    handleData(ctx, data)
+})
+
+dataScene.hears(/^(\d+) m[eê]s(es)?/gi, async ctx => {
+    const data = moment().add({ months: ctx.match[1] })
+    handleData(ctx, data)
+})
+
+dataScene.hears(/(\d{2}\/\d{2}\/\{4})/g, async ctx => {
+    const data = moment(ctx.match[1], 'DD/MM/YYYY')
+    handleData(ctx, data)
+})
+
+const handleData = async (ctx, data) => {
+    await atualizarDataTarefa(idTarefa, data)
+    await ctx.reply('Data atualizada!')
+    await exibirTarefa(ctx, idTarefa, true)
+    ctx.scene.leave()
+}
+
+dataScene.on('message', ctx => {
+    ctx.reply('Padrões aceitos\nDD/MM/YYYY\nX dias\nX semanas\nX meses')
+})
+
+//--------- Observacao Scene
+const obsScene = new Scene('observacoes')
+obsScene.enter(ctx => {
+    idTarefa = ctx.match[1]
+    ctx.reply('Já pode adicionar suas anotações...')
+})
+
+obsScene.leave(ctx => idTarefa = null)
+
+obsScene.on('text', async ctx => {
+    const tarefa = await getTarefa(idTarefa)
+    const novoTexto = ctx.update.message.text
+    const obs = tarefa.observacao ? tarefa.observacao + '\n---\n' + novoTexto : novoTexto
+    const res = await atualizarObservacaoTarefa(idTarefa, obs)
+    ctx.reply('Observação adicionada!')
+    await exibirTarefa(ctx, idTarefa, true)
+    ctx.scene.leave()
+})
+
+obsScene.on('message', ctx => ctx.reply('Apenas observações em texto são aceitas!'))
+
+
+const stage = new Stage([dataScene, obsScene])
+bot.use(session())
+bot.use(stage.middleware())
+
+bot.action(/setData (.+)/, Stage.enter('data'))
+bot.action(/addNota (.+)/, Stage.enter('observacoes'))
+
 //--------- Inserir Tarefa
 bot.on('text', async ctx => {
     try {
@@ -106,6 +199,5 @@ bot.on('text', async ctx => {
         console.log(e)
     }
 })
-
 
 bot.startPolling()

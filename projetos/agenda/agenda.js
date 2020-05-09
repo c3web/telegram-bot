@@ -3,7 +3,15 @@ const Telegraf = require('telegraf')
 const Extra = require('telegraf/extra')
 const Markup = require('telegraf/markup')
 const moment = require('moment')
-const { getAgenda, getTarefa } = require('./agendaServicos')
+const {
+    getAgenda,
+    getTarefa,
+    getTarefas,
+    getConcluidas,
+    incluirTarefa,
+    concluirTarefa,
+    excluirTarefa,
+} = require('./agendaServicos')
 
 const bot = new Telegraf(env.token)
 
@@ -53,9 +61,51 @@ bot.command('dia', async ctx => {
     ctx.reply(`Aqui está a sua agenda do dia`, botoesAgenda(tarefas))
 })
 
+bot.command('amanha', async ctx => {
+    const tarefas = await getAgenda(moment().add({ day: 1 }))
+    ctx.reply(`Aqui está a sua agenda ãté amanhã`, botoesAgenda(tarefas))
+})
+
+bot.command('semana', async ctx => {
+    const tarefas = await getAgenda(moment().add({ week: 1 }))
+    ctx.reply(`Aqui está a sua agenda até semana que vem`, botoesAgenda(tarefas))
+})
+
+bot.command('concluidas', async ctx => {
+    const tarefas = await getConcluidas()
+    ctx.reply(`Essas são as tarefas que você já concluiu`, botoesAgenda(tarefas))
+})
+
+bot.command('tarefas', async ctx => {
+    const tarefas = await getTarefas()
+    ctx.reply(`Essas são as tarefas sem data definida`, botoesAgenda(tarefas))
+})
+
 //--------- Comandos do BOT
 bot.action(/mostrar (.+)/, async ctx => {
     await exibirTarefa(ctx, ctx.match[1])
 })
+
+bot.action(/concluir (.+)/, async ctx => {
+    await concluirTarefa(ctx.match[1])
+    await exibirTarefa(ctx, ctx.match[1])
+    ctx.reply('Tarefa concluída')
+})
+
+bot.action(/excluir (.+)/, async ctx => {
+    await excluirTarefa(ctx.match[1])
+    await ctx.editMessageText('Tarefa excluída')
+})
+
+//--------- Inserir Tarefa
+bot.on('text', async ctx => {
+    try {
+        const tarefa = await incluirTarefa(ctx.update.message.text)
+        await exibirTarefa(ctx, tarefa.id, true)
+    } catch (e) {
+        console.log(e)
+    }
+})
+
 
 bot.startPolling()

@@ -12,11 +12,41 @@ const getAgenda = async date => {
 }
 
 const getTarefa = async id => {
-    const resp = await axios.get(`${baseUrl}/${id}`)
-    return resp.data
+    const res = await axios.get(`${baseUrl}/${id}`)
+    return res.data
+}
+
+const getTarefas = async () => {
+    const res = await axios.get(`${baseUrl}?_sort=descrucao&_order=asc`)
+    return res.data.filter(item => item.dt_previsao === null && item.dt_conclusao === null)
+}
+
+const getConcluidas = async () => {
+    const res = await axios.get(`${baseUrl}?_sort=dt_previsao,descricao&_order=asc`)
+    return res.data.filter(item => item.dt_conclusao !== null)
+}
+
+const incluirTarefa = async desc => {
+    const res = await axios.post(`${baseUrl}`, {descricao: desc, dt_previsao: null, dt_conclusao: null, observacao: null})
+    return res.data
+}
+
+const concluirTarefa = async id => {
+    const tarefa = await getTarefa(id)
+    const res = await axios.put(`${baseUrl}/${id}`, {...tarefa, dt_conclusao: moment().format('YYYY-MM-DD')})
+    return res.data
+}
+
+const excluirTarefa = async id => {
+    await axios.delete(`${baseUrl}/${id}`)
 }
 
 module.exports = {
     getAgenda,
-    getTarefa
+    getTarefa,
+    getTarefas,
+    getConcluidas,
+    incluirTarefa,
+    concluirTarefa,
+    excluirTarefa,
 }
